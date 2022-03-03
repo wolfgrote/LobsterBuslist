@@ -25,13 +25,13 @@
 #define MIN_I 4000				// maximum integer number of measurement value (4mA)
 #define TOLERANCE 0.0			// relative tolerance for out-of-range detection of measurement
 
-struct busObj bus[1440];
+struct busObj bus[500];
 uint8_t PNsend[PN_SENDSIZE]={0}, PNrecv[PN_RECVSIZE]={0};
 
 
 int main(void) {
-	int i;
-	readBuslist(FILENAME, bus, 1440);
+	int i, n;
+	n=readBuslist(FILENAME, bus, 1440);
 	i = 0;
 	do {
 		printf("A[%3d] = %3d, %s, %s, %4s, %lf, %lf, %s, %3d, %d->%d.%d\n", i, bus[i].num, bus[i].tag, bus[i].name, bus[i].ctrdef, bus[i].llMeas, bus[i].ulMeas, bus[i].unit, bus[i].datatype, bus[i].write, bus[i].startByte, bus[i].bit);
@@ -67,9 +67,20 @@ int main(void) {
 	//printBitSequence((void*) &num2, 2, buffer3);
 	printf("\nVariable in decimal: %u, variable binary. %s\n", num3, printBitSequence((void*) &num3, 4, buffer3));
 	printf("\n");
-	readBus(bus, PNrecv, 100);
-	for (i=0; i<100; i++){
-		printf("%s = %lf or in int: %u \n",bus[i].name, bus[i].dval, bus[i].busval);
+	for (i=0; i<PN_RECVSIZE;i++){
+		PNrecv[i] = (uint8_t) rand() % 256;
+	}
+	printf("n=%d\n",n);
+	readBus(bus, PNrecv, n);
+	printf("n=%d\n",n);
+	printf("Unix Timestamp: %lu\n", bus[112].ulval);
+	for (i=0; i<n; i++){
+		if (bus[i].datatype == 5 || bus[i].datatype == 6)
+			printf("%s = %g or in int: %u \n",bus[i].name, bus[i].dval, bus[i].busval);
+		else if (bus[i].datatype == 2 || bus[i].datatype == 3)
+			printf("%s = %d or in int: %u \n",bus[i].name, bus[i].ival, bus[i].busval);
+		else if (bus[i].datatype == 4)
+			printf("%s = %lu or in int: %u \n",bus[i].name, bus[i].ulval, bus[i].busval);
 	}
 	printf("Closing...\n");
 	return EXIT_SUCCESS;
@@ -83,7 +94,7 @@ int readBuslist(const char *busfile, struct busObj *bus, int n){
 	uint16_t offsetAddr = 0;
 	if ((fp=fopen(busfile,"r")) == NULL) {
 		fprintf(stderr, "Problem opening file '%s' : %s\n", busfile, strerror(errno));
-		return EXIT_FAILURE;
+		return -1;
 	}
 	i=0;
 	while (fgets(strbuf1, BUF, fp) && i<n){	//row-wise extraction of strings
@@ -149,10 +160,10 @@ int readBuslist(const char *busfile, struct busObj *bus, int n){
 	  }
 	}
 	fclose(fp);
-	return EXIT_SUCCESS;
+	return i;
 }
 
-double buscode2double(struct busObj *bus, uint8_t *recvstream) {
+double buscode2double(struct busObj *bus, const uint8_t *recvstream) {
 	// convert uint16 coded value to double value
 	double retval, a, b;
 	const int span = MAX_I-MIN_I;
@@ -204,9 +215,14 @@ double buscode2double(struct busObj *bus, uint8_t *recvstream) {
 	return retval;
 }
 
-int readBus(struct busObj *bus, uint8_t *recvstream, int n){
+int readBus(struct busObj *bus, const uint8_t *recvstream, int n){
 	// function advances trough bus struct array and fills its respective values using the byte array recvstream
 	int i;
+	int16_t int16_buf=0;
+	uint16_t uint16_buf=0;
+	uint32_t uint32_buf=0;
+	float float_buf=0.0;
+
 
 	// loop over all n busObj and case-distinct between type of values
 	for (i=0; i<n; i++){
@@ -216,19 +232,23 @@ int readBus(struct busObj *bus, uint8_t *recvstream, int n){
 				bus[i].bval = getBit(recvstream[bus[i].startByte], bus[i].bit);
 				break;
 			case 2: 	// INT = int16_t
-				bus[i].ival = (int) getBEint16((int16_t*) recvstream[bus[i].startByte]); // TODO: check if correct
+				memcpy(&int16_buf, &recvstream[bus[i].startByte], 2*sizeof(uint8_t));
+				bus[i].ival = (int) getBEint16(&int16_buf); // TODO: check if correct
 				break;
 			case 3: 	// UINT = uint16_t
-				bus[i].ival = (int) getBEuint16((uint16_t*) recvstream[bus[i].startByte]); // TODO: check if correct
+				memcpy(&uint16_buf, &recvstream[bus[i].startByte], 2*sizeof(uint8_t));
+				bus[i].ival = (int) getBEuint16(&uint16_buf); // TODO: check if correct
 				break;
 			case 4: 	// UDINT = uint32_t
-				bus[i].ival = (int) getBEuint32((uint32_t*) recvstream[bus[i].startByte]); // TODO: check if correct
+				memcpy(&uint32_buf, &recvstream[bus[i].startByte], 4*sizeof(uint8_t));
+				bus[i].ulval = (unsigned long) getBEuint32(&uint32_buf); // TODO: check if correct
 				break;
 			case 5: 	// Scaled Real
 				buscode2double(&bus[i], recvstream);
 				break;
 			case 6:		// REAL = 32 bit float
-				bus[i].dval = (double) getBEreal((float*) recvstream[bus[i].startByte]);
+				memcpy(&float_buf, &recvstream[bus[i].startByte], 4*sizeof(uint8_t));
+				bus[i].dval = (double) getBEreal(&float_buf);
 				break;
 			default :
 				printf("WARNING: Case not existent in function readBus.\n");
@@ -266,6 +286,7 @@ uint32_t getBEuint32(uint32_t *bigEndianNumber){
 	memcpy(buf, bigEndianNumber, 4*sizeof(uint8_t));
 	return (uint32_t) (buf[3] << 0 | buf[2] << 8 | buf[1] << 16 | buf[0] << 24);
 }
+
 
 float getBEreal(float *bigEndianNumber){
 	union swapType {
@@ -307,5 +328,7 @@ char *printBitSequence(void *var, size_t bytes, char *strng){
 	strng[bytes*8] = '\0';
 	return strng;
 }
+
+
 
 

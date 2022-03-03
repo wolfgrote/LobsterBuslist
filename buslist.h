@@ -39,9 +39,9 @@ struct busObj { 				// Object for bus communication
 
 int readBuslist(const char *busfile, struct busObj *bus, int n);
 
-double buscode2double(struct busObj *bus, uint8_t *recvstream);
+double buscode2double(struct busObj *bus, const uint8_t *recvstream);
 
-int readBus(struct busObj *bus, uint8_t *recvstream, int n);
+int readBus(struct busObj *bus, const uint8_t *recvstream, int n);
 
 char* replace_char(char* str, char find, char replace);
 
