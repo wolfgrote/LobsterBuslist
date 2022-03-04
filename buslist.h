@@ -41,7 +41,11 @@ int readBuslist(const char *busfile, struct busObj *bus, int n);
 
 double buscode2double(struct busObj *bus, const uint8_t *recvstream);
 
+int double2buscode(struct busObj *bus, uint8_t *sendstream);
+
 int readBus(struct busObj *bus, const uint8_t *recvstream, int n);
+
+int writeBus(struct busObj *bus, uint8_t *sendstream, int n);
 
 char* replace_char(char* str, char find, char replace);
 
@@ -55,12 +59,13 @@ float getBEreal(float *bigEndianNumber);
 
 bool getBit(uint8_t bitArray, int n);
 
+void setBit(int byte_indx, int bit_indx, uint8_t *sendstream, bool value);
+
 char *printBitSequence(void *var, size_t bytes, char *strng);
 
 template <typename T>
 T swap_endian(T u) {
     static_assert (CHAR_BIT == 8, "CHAR_BIT != 8");
-
     union {
         T u;
         uint8_t u8[sizeof(T)];
@@ -70,7 +75,6 @@ T swap_endian(T u) {
 
     for (size_t k = 0; k < sizeof(T); k++)
         dest.u8[k] = source.u8[sizeof(T) - k - 1];
-
     return dest.u;
 }
 
