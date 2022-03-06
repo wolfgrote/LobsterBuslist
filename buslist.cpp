@@ -88,7 +88,7 @@ int main(void) {
 		}
 	}
 	printf("n=%d\n",n);
-	readBus(bus, PNrecv, n);
+	readBus(bus, PNrecv, n, true);
 	writeBus(bus, PNsend, n, true);
 	printf("n=%d\n",n);
 	for (i=0; i<n; i++){
@@ -186,13 +186,13 @@ int readBuslist(const char *busfile, struct busObj *bus, int n){
 	return i;
 }
 
-double buscode2double(struct busObj *bus, const uint8_t *recvstream) {
+double buscode2double(struct busObj *bus, uint16_t buscode){
 	// convert uint16 coded value to double value
 	double retval, a, b;
 	const int span = MAX_I-MIN_I;
 	char errormsg[200];
 	// read number from byte stream and put into busval:
-	bus->busval = (recvstream[bus->startByte] << 8) | (recvstream[bus->startByte+1]); // convert from big endian to to little endian
+	bus->busval = buscode; // convert from big endian to to little endian
 	// coefficients for conversion to real world values:
 	a = (bus->ulMeas-bus->llMeas) / ((double) (MAX_I - MIN_I));
 	b = bus->llMeas - a*(double) MIN_I;
@@ -302,14 +302,22 @@ int readBus(struct busObj *bus, const uint8_t *recvstream, int n, bool bigendian
 				}
 				break;
 			case 5: 	// Scaled Real
+				memcpy(&uint16_buf, &recvstream[bus[i].startByte], 2*sizeof(uint8_t));
 				if (bigendian == true){
-					buscode2double(&bus[i], recvstream); // TODO: change function boscode2double to base level type and delete endian swapping to be in line with the other functions.
+					buscode2double(&bus[i], getBEuint16(&uint16_buf));
 				}
-				// TODO: after change of fcn continue.
+				else {
+					buscode2double(&bus[i], uint16_buf);
+				}
 				break;
 			case 6:		// REAL = 32 bit float
 				memcpy(&float_buf, &recvstream[bus[i].startByte], 4*sizeof(uint8_t));
-				bus[i].dval = (double) getBEreal(&float_buf);
+				if (bigendian == true){
+					bus[i].dval = (double) getBEreal(&float_buf);
+				}
+				else {
+					bus[i].dval = (double) float_buf;
+				}
 				break;
 			default :
 				printf("WARNING: Case not existent in function readBus.\n");
