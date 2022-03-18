@@ -30,48 +30,15 @@ uint8_t PNsend[PN_SENDSIZE]={0}, PNrecv[PN_RECVSIZE]={0};
 
 
 int main(void) {
-	int i, n;
-	uint16_t le_num=0, be_num=0;
+	int i, n, tmp;
+	bool loop = true;
+	char keystr[2], key;
+	uint16_t be_num=0xe02e;
 	n=readBuslist(FILENAME, bus, 1440);
+	printf("Bus list has n=%d elements.\n",n);
 	i = 0;
-	do {
-		printf("A[%3d] = %3d, %s, %s, %4s, %lf, %lf, %s, %3d, %d->%d.%d\n", i, bus[i].num, bus[i].tag, bus[i].name, bus[i].ctrdef, bus[i].llMeas, bus[i].ulMeas, bus[i].unit, bus[i].datatype, bus[i].write, bus[i].startByte, bus[i].bit);
-		i++;
-	}
-	while (bus[i].num > bus[i-1].num && i < 1440);
 	printf("float has %lu bits\n",sizeof(float)*CHAR_BIT);
-	int16_t num = 12345;
-	uint16_t num2 = 65000;
-	uint32_t num3 = 0xFFFFFFF1;
-	float num4 = 12.888;
-	printf("%d,\t\t %d\n", num, getBEint16(&num));
-	printf("%x,\t\t %x\n", num, getBEint16(&num));
-	printf("%d,\t\t %d\n", num2, getBEuint16(&num2));
-	printf("%x,\t\t %x\n", num2, getBEuint16(&num2));
-	printf("%u,\t\t %u\n", num3, getBEuint32(&num3));
-	printf("%x,\t\t %x\n", num3, getBEuint32(&num3));
-	printf("%f,\t\t %f\n", num4, getBEreal(&num4));
-	print_hex(num4);
-	printf(",\t\t ");
-	print_hex(getBEreal(&num4));
-	printf("\n");
-	printf("%f,\t\t %f\n", num4, swap_endian<float>(num4));
-	print_hex(num4);
-	printf(",\t\t ");
-	print_hex(swap_endian<float>(num4));
-	printf("\n");
-	uint8_t bitArray = 0x1;
-	for (i=7; i>=0; i--){
-		printf("%d ",getBit(bitArray, i));
-	}
-	char buffer3[65];
-	//printBitSequence((void*) &num2, 2, buffer3);
-	printf("\nVariable in decimal: %u, variable binary. %s\n", num3, printBitSequence((void*) &num3, 4, buffer3));
-	printf("\n");
-	le_num = 4000;
-	be_num = getBEuint16(&le_num);
 	for (i=0; i<PN_RECVSIZE/2;i++){
-		//PNrecv[2*i] = (uint8_t) rand() % 256;
 		memcpy(&PNrecv[2*i], &be_num, 2*sizeof(uint8_t));
 	}
 	for (i=0; i<n; i++){
@@ -87,10 +54,8 @@ int main(void) {
 			}
 		}
 	}
-	printf("n=%d\n",n);
 	readBus(bus, PNrecv, n, true);
 	writeBus(bus, PNsend, n, true);
-	printf("n=%d\n",n);
 	for (i=0; i<n; i++){
 		if (bus[i].datatype == 5 || bus[i].datatype == 6)
 			printf("%s = %g or in int: %u \n",bus[i].name, bus[i].dval, bus[i].busval);
@@ -105,6 +70,103 @@ int main(void) {
 	for (i=0; i<PN_SENDSIZE/2; i++){
 		printf("PNsend[%d|%d] = %x|%x  ",2*i, 2*i+1, PNsend[2*i], PNsend[2*i+1]);
 	}
+	while (loop){ // infinite loop for signal checking
+		printf("i: read input from PCS7, o: change output variable to PCS7, l: display bus list, s: print send stream, r: print receive stream, q: quit\n");
+		printf("Enter key: ");
+		scanf("%s", keystr);
+		printf("\n");
+		key = keystr[0];
+		switch (key) {
+		case 'i':
+			printf("Enter signal number: ");
+			scanf("%d", &i);
+			printf("\n");
+			i--;		// decrement to get the array element
+			if (i < n && bus[i].write==false){
+				if (bus[i].datatype == 5 || bus[i].datatype == 6)
+					printf("sig %d: %s = %g or in int: %u \n",i+1, bus[i].name, bus[i].dval, bus[i].busval);
+				else if (bus[i].datatype == 2 || bus[i].datatype == 3)
+					printf("sig %d: %s = %d\n", i+1, bus[i].name, bus[i].ival);
+				else if (bus[i].datatype == 4)
+					printf("sig %d: %s = %lu\n",i+1, bus[i].name, bus[i].ulval);
+				else if (bus[i].datatype == 1){
+					printf("sig %d: %s = %d\n",i+1, bus[i].name, bus[i].bval);
+				}
+			}
+			else {
+				printf("Failed: Signal number is beyond range or write signal.\n");
+			}
+			break;
+		case 'o':
+			printf("Enter signal number: ");
+			scanf("%d", &i);
+			printf("\n");
+			i--;		// decrement to get the array element
+			if (i < n && bus[i].write==true){
+				if (bus[i].datatype == 5 || bus[i].datatype == 6){ // real
+					printf("sig %d: %s = %g ... %g -> real value = ",i+1, bus[i].name, bus[i].llMeas, bus[i].ulMeas);
+					scanf("%lf", &bus[i].dval);
+					printf("\n");
+					writeBus(bus, PNsend, n, true);
+					printf("sig %d: value = %lf, uint16 coded: %u\n", i+1, bus[i].dval, bus[i].busval);
+				}
+				else if (bus[i].datatype == 2 || bus[i].datatype == 3){ // (unsigned) short integer
+					printf("sig %d: %s integer value = ",i+1, bus[i].name);
+					scanf("%d", &bus[i].ival);
+					printf("\n");
+					writeBus(bus, PNsend, n, true);
+					printf("sig %d: value = %d\n", i+1, bus[i].ival);
+				}
+				else if (bus[i].datatype == 4){ // unsigned long
+					printf("sig %d: %s unsigned long integer value = ",i+1, bus[i].name);
+					scanf("%lu", &bus[i].ulval);
+					printf("\n");
+					writeBus(bus, PNsend, n, true);
+					printf("sig %d: value = %lu\n", i+1, bus[i].ulval);
+				}
+				else if (bus[i].datatype == 1){ // boolean
+					printf("sig %d: %s boolean value (0/1) = ",i+1, bus[i].name);
+					scanf("%d", &tmp);
+					bus[i].bval = tmp;
+					printf("\n");
+					writeBus(bus, PNsend, n, true);
+					printf("sig %d: value = %d\n", i+1, bus[i].bval);
+				}
+			}
+			else {
+				printf("Failed: Signal number is beyond range or read signal.\n");
+			}
+			break;
+		case 'l':	// display bus list
+			i = 0;
+			do {
+				printf("A[%3d] = %3d, %s, %s, %4s, %lf, %lf, %s, %3d, %d->%d.%d\n", i, bus[i].num, bus[i].tag, bus[i].name, bus[i].ctrdef, bus[i].llMeas, bus[i].ulMeas, bus[i].unit, bus[i].datatype, bus[i].write, bus[i].startByte, bus[i].bit);
+				i++;
+			}
+			while (bus[i].num > bus[i-1].num && i < 1440);
+			break;
+		case 's':	// display send stream
+			for (i=0; i<PN_SENDSIZE/2; i++){
+				printf("PNsend[%d|%d] = %x|%x  ",2*i, 2*i+1, PNsend[2*i], PNsend[2*i+1]);
+			}
+			printf("\n");
+			break;
+		case 'r':	// display receive stream
+			for (i=0; i<PN_RECVSIZE/2; i++){
+				printf("PNrecv[%d|%d] = %x|%x  ",2*i, 2*i+1, PNrecv[2*i], PNrecv[2*i+1]);
+			}
+			printf("\n");
+			break;
+		case 'q':
+			loop = false;
+			break;
+		default :
+			printf("Key %c not assigned. Select different.\n", key);
+			break;
+		}
+	}
+
+
 	printf("\nClosing...\n");
 	return EXIT_SUCCESS;
 }

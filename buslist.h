@@ -34,7 +34,7 @@ struct busObj { 				// Object for bus communication
 	int chn_err_trt;			// on channel error use: (-1: lower limit of range, 1: upper limit of range, 0: nominal value)
 	char ctrdef[5];				// definition of control quantity (u, w, y, d) followed by number (1, 2, ..) e.g. w3 for 3rd set point
 	// constructor:
-	busObj():num(0), name("empty"),tag("empty"),unit("1"),datatype(0),bval(false),ival(0),ulval(0),dval(0.0),busval(0),llMeas(0.0), ulMeas(1.0), startByte(0), bit(0), write(false), nominalVal(0.0), chn_err(false), chn_err_msg(false), chn_err_trt(1), ctrdef("none") { }
+	busObj():num(0), name("empty"),tag("empty"),unit("1"),datatype(0),bval(false),ival(0),ulval(0),dval(0.0),busval(0),llMeas(0.0), ulMeas(1.0), startByte(0), bit(0), write(false), nominalVal(0.0), chn_err(false), chn_err_msg(false), chn_err_trt(0), ctrdef("none") { }
 };
 
 int readBuslist(const char *busfile, struct busObj *bus, int n);
